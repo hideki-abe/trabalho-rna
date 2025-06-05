@@ -10,11 +10,20 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 # 1. Carregar os dados
+print("Carregando os dados:")
 df = pd.read_csv("train.csv")
 
 # 2. Separar features e target
-X = df.drop(columns=["SalePrice", "Id"])
+correlations = df.corr(numeric_only=True)["SalePrice"]
+selected_features = correlations[correlations > 0.3].index.drop("SalePrice")
+X_selected = df[selected_features]
+print(X_selected.head)
+
+X = df[selected_features]
 y = df["SalePrice"].values.reshape(-1, 1)
+
+print("X:", X)
+print("Y:", y)
 
 # 3. Separar colunas numéricas e categóricas
 num_cols = X.select_dtypes(include=["int64", "float64"]).columns
@@ -57,10 +66,9 @@ class HousePriceModel(nn.Module):
     def __init__(self, input_dim):
         super().__init__()
         self.network = nn.Sequential(
-            nn.Linear(input_dim, 128),
+            nn.Linear(input_dim, 64),
             nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(64, 1)
         )
 
@@ -71,10 +79,10 @@ model = HousePriceModel(X_train_tensor.shape[1])
 
 # 7. Treinar a rede
 loss_fn = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-3)
 
 # Treinamento
-epochs = 100
+epochs = 10000
 for epoch in range(epochs):
     model.train()
     y_pred = model(X_train_tensor)
@@ -98,7 +106,8 @@ df_test = pd.read_csv("test.csv")
 ids = df_test["Id"]
 
 # Remover coluna Id
-X_test = df_test.drop(columns=["Id"])
+X_test = df_test[selected_features]
+
 
 # Preprocessar com o mesmo pipeline treinado
 X_test_processed = preprocessor.transform(X_test)
