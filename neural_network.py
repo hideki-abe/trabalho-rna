@@ -8,6 +8,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # 1. Carregar os dados
 print("Carregando os dados:")
@@ -131,3 +132,15 @@ submission = pd.DataFrame({
 submission.to_csv("submission.csv", index=False)
 
 print("Arquivo 'submission.csv' gerado com sucesso!")
+
+# Avaliação com validação
+val_pred_np = y_scaler.inverse_transform(val_pred.numpy())
+y_val_np = y_scaler.inverse_transform(y_val_tensor.numpy())
+
+mae = mean_absolute_error(y_val_np, val_pred_np)
+rmse = np.sqrt(mean_squared_error(y_val_np, val_pred_np))
+r2 = r2_score(y_val_np, val_pred_np)
+
+print(f"📊 Avaliação final:\nMAE: R$ {mae:,.2f}\nRMSE: R$ {rmse:,.2f}\nR²: {r2:.4f}")
+media_preco = df["SalePrice"].mean()
+print(f"🏠 Média dos valores das casas: R$ {media_preco:,.2f}")
