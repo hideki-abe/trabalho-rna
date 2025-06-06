@@ -11,9 +11,16 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+
 # 1. Carregar os dados
 print("Carregando os dados:")
 df = pd.read_csv("train.csv")
+
+# 2. Usar todas as features (menos Id e SalePrice)
+
+# 2a. Engenharia de atributos manuais
 df["TotalSF"] = df["TotalBsmtSF"] + df["1stFlrSF"] + df["2ndFlrSF"]
 df["TotalBath"] = df["FullBath"] + 0.5 * df["HalfBath"] + df["BsmtFullBath"] + 0.5 * df["BsmtHalfBath"]
 df["Age"] = df["YrSold"] - df["YearBuilt"]
@@ -22,7 +29,6 @@ df["IsRemodeled"] = (df["YearBuilt"] != df["YearRemodAdd"]).astype(int)
 df["HasGarage"] = (df["GarageArea"] > 0).astype(int)
 df["HasBasement"] = (df["TotalBsmtSF"] > 0).astype(int)
 
-# 2. Usar todas as features (menos Id e SalePrice)
 X = df.drop(columns=["Id", "SalePrice"])
 y = np.log1p(df["SalePrice"].values.reshape(-1, 1))
 
@@ -49,7 +55,8 @@ preprocessor = ColumnTransformer([
 X_processed = preprocessor.fit_transform(X)
 
 # 5. Normalizar target
-y_scaled = y
+y_scaler = StandardScaler()
+y_scaled = y_scaler.fit_transform(y)
 
 # 6. Dividir em treino e validação
 X_train, X_val, y_train, y_val = train_test_split(X_processed, y_scaled, test_size=0.2, random_state=42)
@@ -126,6 +133,8 @@ model.load_state_dict(best_model_state)
 
 # 10. Test set
 df_test = pd.read_csv("test.csv")
+
+# Criar as mesmas features no test.csv
 df_test["TotalSF"] = df_test["TotalBsmtSF"] + df_test["1stFlrSF"] + df_test["2ndFlrSF"]
 df_test["TotalBath"] = df_test["FullBath"] + 0.5 * df_test["HalfBath"] + df_test["BsmtFullBath"] + 0.5 * df_test["BsmtHalfBath"]
 df_test["Age"] = df_test["YrSold"] - df_test["YearBuilt"]
@@ -133,6 +142,7 @@ df_test["RemodAge"] = df_test["YrSold"] - df_test["YearRemodAdd"]
 df_test["IsRemodeled"] = (df_test["YearBuilt"] != df_test["YearRemodAdd"]).astype(int)
 df_test["HasGarage"] = (df_test["GarageArea"] > 0).astype(int)
 df_test["HasBasement"] = (df_test["TotalBsmtSF"] > 0).astype(int)
+
 ids = df_test["Id"]
 X_test = df_test.drop(columns=["Id"])
 X_test_processed = preprocessor.transform(X_test)
@@ -144,7 +154,7 @@ model.eval()
 with torch.no_grad():
     y_test_pred_scaled = model(X_test_tensor).numpy()
 
-y_test_pred = np.expm1(y_test_pred_scaled)
+y_test_pred = np.expm1(y_scaler.inverse_transform(y_test_pred_scaled))
 
 # 12. Submissão
 submission = pd.DataFrame({
@@ -156,12 +166,13 @@ submission.to_csv("submission.csv", index=False)
 print("✅ Arquivo 'submission.csv' gerado com sucesso!")
 
 # 13. Avaliação
-val_pred_np = np.expm1(val_pred.numpy())
-y_val_np = np.expm1(y_val_tensor.numpy())
+val_pred_np = np.expm1(y_scaler.inverse_transform(val_pred.numpy()))
+y_val_np = np.expm1(y_scaler.inverse_transform(y_val_tensor.numpy()))
 
 mae = mean_absolute_error(y_val_np, val_pred_np)
 rmse = np.sqrt(mean_squared_error(y_val_np, val_pred_np))
 r2 = r2_score(y_val_np, val_pred_np)
+
 # 13. Calcular RMSLE
 def rmsle(y_true, y_pred):
     # Garantir que não haja valores negativos
@@ -170,8 +181,6 @@ def rmsle(y_true, y_pred):
     return np.sqrt(np.mean(np.square(np.log1p(y_pred) - np.log1p(y_true))))
 
 rmsle_score = rmsle(y_val_np, val_pred_np)
-
-
 
 media_preco = df["SalePrice"].mean()
 
